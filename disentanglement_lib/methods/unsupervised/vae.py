@@ -42,7 +42,8 @@ class BaseVAE(gaussian_encoder_model.GaussianEncoderModel):
     data_shape = features.get_shape().as_list()[1:]
     z_mean, z_logvar = self.gaussian_encoder(features, is_training=is_training)
     z_sampled = self.sample_from_latent_distribution(z_mean, z_logvar)
-    reconstructions = self.decode(z_sampled, data_shape, is_training)
+    com_z_sampled = self.complexfy(z_sampled)
+    reconstructions = self.decode(com_z_sampled, data_shape, is_training)
     per_sample_loss = losses.make_reconstruction_loss(features, reconstructions)
     reconstruction_loss = tf.reduce_mean(per_sample_loss)
     kl_loss = compute_gaussian_kl(z_mean, z_logvar)
@@ -135,7 +136,7 @@ def make_metric_fn(*names):
 class BetaVAE(BaseVAE):
   """BetaVAE model."""
 
-  def __init__(self, beta=gin.REQUIRED):
+  def __init__(self, beta=gin.REQUIRED, N=gin.N):
     """Creates a beta-VAE model.
 
     Implementing Eq. 4 of "beta-VAE: Learning Basic Visual Concepts with a
@@ -149,6 +150,7 @@ class BetaVAE(BaseVAE):
       model_fn: Model function for TPUEstimator.
     """
     self.beta = beta
+    self.N = N
 
   def regularizer(self, kl_loss, z_mean, z_logvar, z_sampled):
     del z_mean, z_logvar, z_sampled
@@ -177,6 +179,7 @@ class AnnealedVAE(BaseVAE):
   def __init__(self,
                gamma=gin.REQUIRED,
                c_max=gin.REQUIRED,
+               N=gin.N,
                iteration_threshold=gin.REQUIRED):
     """Creates an AnnealedVAE model.
 
@@ -190,6 +193,7 @@ class AnnealedVAE(BaseVAE):
     """
     self.gamma = gamma
     self.c_max = c_max
+    self.N = N
     self.iteration_threshold = iteration_threshold
 
   def regularizer(self, kl_loss, z_mean, z_logvar, z_sampled):
@@ -202,7 +206,7 @@ class AnnealedVAE(BaseVAE):
 class FactorVAE(BaseVAE):
   """FactorVAE model."""
 
-  def __init__(self, gamma=gin.REQUIRED):
+  def __init__(self, gamma=gin.REQUIRED,N=gin.N):
     """Creates a FactorVAE model.
 
     Implementing Eq. 2 of "Disentangling by Factorizing"
@@ -212,6 +216,7 @@ class FactorVAE(BaseVAE):
       gamma: Hyperparameter for the regularizer.
     """
     self.gamma = gamma
+    self.N = N
 
   def model_fn(self, features, labels, mode, params):
     """TPUEstimator compatible model function."""
@@ -226,7 +231,8 @@ class FactorVAE(BaseVAE):
           z_sampled, is_training=is_training)
       _, probs_z_shuffle = architectures.make_discriminator(
           z_shuffle, is_training=is_training)
-    reconstructions = self.decode(z_sampled, data_shape, is_training)
+    com_z_sampled = self.complexfy(z_sampled)
+    reconstructions = self.decode(com_z_sampled, data_shape, is_training)
     per_sample_loss = losses.make_reconstruction_loss(
         features, reconstructions)
     reconstruction_loss = tf.reduce_mean(per_sample_loss)
@@ -334,6 +340,7 @@ class DIPVAE(BaseVAE):
   def __init__(self,
                lambda_od=gin.REQUIRED,
                lambda_d_factor=gin.REQUIRED,
+               N = gin.N,
                dip_type="i"):
     """Creates a DIP-VAE model.
 
@@ -349,6 +356,7 @@ class DIPVAE(BaseVAE):
     """
     self.lambda_od = lambda_od
     self.lambda_d_factor = lambda_d_factor
+    self.N = N
     self.dip_type = dip_type
 
   def regularizer(self, kl_loss, z_mean, z_logvar, z_sampled):

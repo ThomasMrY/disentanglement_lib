@@ -51,6 +51,12 @@ class GaussianEncoderModel(object):
         z_mean,
         tf.exp(z_logvar / 2) * tf.random_normal(tf.shape(z_mean), 0, 1),
         name="sampled_latent_variable")
+  
+  def complexfy(self,z):
+    real = tf.nn.sin(2*np.pi*z/self.N)
+    imag = tf.nn.cos(2*np.pi*z/self.N)
+    cm_z = tf.concat([real,imag],axis=1)
+    return cm_z
 
 
 @gin.configurable("export_as_tf_hub", whitelist=[])
@@ -68,7 +74,6 @@ def export_as_tf_hub(gaussian_encoder_model,
     export_path: String with path where to save the TFHub module to.
     drop_collections: List of collections to drop from the graph.
   """
-
   def module_fn(is_training):
     """Module function used for TFHub export."""
     with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
@@ -88,8 +93,12 @@ def export_as_tf_hub(gaussian_encoder_model,
       # Add a signature for reconstructions.
       latent_vector = gaussian_encoder_model.sample_from_latent_distribution(
           mean, logvar)
+
+      cmp_latent = gaussian_encoder_model.complexfy(latent_vector)
+      
       reconstructed_images = gaussian_encoder_model.decode(
-          latent_vector, observation_shape, is_training)
+          cmp_latent, observation_shape, is_training)
+      
       hub.add_signature(
           name="reconstructions",
           inputs={"images": image_placeholder},
